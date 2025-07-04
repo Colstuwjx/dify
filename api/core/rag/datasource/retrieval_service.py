@@ -171,6 +171,8 @@ class RetrievalService:
                 all_documents.extend(documents)
             except Exception as e:
                 exceptions.append(str(e))
+            finally:
+                db.session.close()
 
     @classmethod
     def embedding_search(
@@ -224,6 +226,8 @@ class RetrievalService:
                         all_documents.extend(documents)
             except Exception as e:
                 exceptions.append(str(e))
+            finally:
+                db.session.close()
 
     @classmethod
     def full_text_index_search(
@@ -272,6 +276,8 @@ class RetrievalService:
                         all_documents.extend(documents)
             except Exception as e:
                 exceptions.append(str(e))
+            finally:
+                db.session.close()
 
     @staticmethod
     def escape_query_for_search(query: str) -> str:

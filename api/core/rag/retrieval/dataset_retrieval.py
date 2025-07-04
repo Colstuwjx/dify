@@ -598,66 +598,69 @@ class DatasetRetrieval:
         metadata_condition: Optional[MetadataCondition] = None,
     ):
         with flask_app.app_context():
-            dataset = db.session.query(Dataset).filter(Dataset.id == dataset_id).first()
+            try:
+                dataset = db.session.query(Dataset).filter(Dataset.id == dataset_id).first()
 
-            if not dataset:
-                return []
+                if not dataset:
+                    return []
 
-            if dataset.provider == "external":
-                external_documents = ExternalDatasetService.fetch_external_knowledge_retrieval(
-                    tenant_id=dataset.tenant_id,
-                    dataset_id=dataset_id,
-                    query=query,
-                    external_retrieval_parameters=dataset.retrieval_model,
-                    metadata_condition=metadata_condition,
-                )
-                for external_document in external_documents:
-                    document = Document(
-                        page_content=external_document.get("content"),
-                        metadata=external_document.get("metadata"),
-                        provider="external",
-                    )
-                    if document.metadata is not None:
-                        document.metadata["score"] = external_document.get("score")
-                        document.metadata["title"] = external_document.get("title")
-                        document.metadata["dataset_id"] = dataset_id
-                        document.metadata["dataset_name"] = dataset.name
-                    all_documents.append(document)
-            else:
-                # get retrieval model , if the model is not setting , using default
-                retrieval_model = dataset.retrieval_model or default_retrieval_model
-
-                if dataset.indexing_technique == "economy":
-                    # use keyword table query
-                    documents = RetrievalService.retrieve(
-                        retrieval_method="keyword_search",
-                        dataset_id=dataset.id,
+                if dataset.provider == "external":
+                    external_documents = ExternalDatasetService.fetch_external_knowledge_retrieval(
+                        tenant_id=dataset.tenant_id,
+                        dataset_id=dataset_id,
                         query=query,
-                        top_k=top_k,
-                        document_ids_filter=document_ids_filter,
+                        external_retrieval_parameters=dataset.retrieval_model,
+                        metadata_condition=metadata_condition,
                     )
-                    if documents:
-                        all_documents.extend(documents)
+                    for external_document in external_documents:
+                        document = Document(
+                            page_content=external_document.get("content"),
+                            metadata=external_document.get("metadata"),
+                            provider="external",
+                        )
+                        if document.metadata is not None:
+                            document.metadata["score"] = external_document.get("score")
+                            document.metadata["title"] = external_document.get("title")
+                            document.metadata["dataset_id"] = dataset_id
+                            document.metadata["dataset_name"] = dataset.name
+                        all_documents.append(document)
                 else:
-                    if top_k > 0:
-                        # retrieval source
+                    # get retrieval model , if the model is not setting , using default
+                    retrieval_model = dataset.retrieval_model or default_retrieval_model
+
+                    if dataset.indexing_technique == "economy":
+                        # use keyword table query
                         documents = RetrievalService.retrieve(
-                            retrieval_method=retrieval_model["search_method"],
+                            retrieval_method="keyword_search",
                             dataset_id=dataset.id,
                             query=query,
-                            top_k=retrieval_model.get("top_k") or 2,
-                            score_threshold=retrieval_model.get("score_threshold", 0.0)
-                            if retrieval_model["score_threshold_enabled"]
-                            else 0.0,
-                            reranking_model=retrieval_model.get("reranking_model", None)
-                            if retrieval_model["reranking_enable"]
-                            else None,
-                            reranking_mode=retrieval_model.get("reranking_mode") or "reranking_model",
-                            weights=retrieval_model.get("weights", None),
+                            top_k=top_k,
                             document_ids_filter=document_ids_filter,
                         )
+                        if documents:
+                            all_documents.extend(documents)
+                    else:
+                        if top_k > 0:
+                            # retrieval source
+                            documents = RetrievalService.retrieve(
+                                retrieval_method=retrieval_model["search_method"],
+                                dataset_id=dataset.id,
+                                query=query,
+                                top_k=retrieval_model.get("top_k") or 2,
+                                score_threshold=retrieval_model.get("score_threshold", 0.0)
+                                if retrieval_model["score_threshold_enabled"]
+                                else 0.0,
+                                reranking_model=retrieval_model.get("reranking_model", None)
+                                if retrieval_model["reranking_enable"]
+                                else None,
+                                reranking_mode=retrieval_model.get("reranking_mode") or "reranking_model",
+                                weights=retrieval_model.get("weights", None),
+                                document_ids_filter=document_ids_filter,
+                            )
 
-                        all_documents.extend(documents)
+                            all_documents.extend(documents)
+            finally:
+                db.session.close()
 
     def to_dataset_retriever_tool(
         self,
